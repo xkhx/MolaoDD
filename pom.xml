@@ -12,6 +12,13 @@
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     </properties>
+    
+    <repositories>
+    	<repository>
+        	<id>jitpack.io</id>
+        	<url>https://jitpack.io</url>
+        </repository>
+    </repositories>
 
     <build>
         <defaultGoal>clean package</defaultGoal>
@@ -64,6 +71,18 @@
             <version>1.2.49</version>
             <scope>provided</scope>
         </dependency>
+        
+        <dependency>
+	    	<groupId>com.github.nitu2003</groupId>
+	        <artifactId>TConfig</artifactId>
+	        <version>1.0</version>
+		</dependency>
+		
+		<dependency>
+	    	<groupId>com.github.nitu2003</groupId>
+	        <artifactId>SimpleDataStorage</artifactId>
+	        <version>1.2</version>
+		</dependency>
     </dependencies>
 
 </project>
