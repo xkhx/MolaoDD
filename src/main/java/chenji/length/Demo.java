@@ -1,6 +1,8 @@
 package chenji.length;
 
+import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.JSONObject;
+import com.sobte.cqp.jcq.entity.CQDebug;
 import com.sobte.cqp.jcq.entity.ICQVer;
 import com.sobte.cqp.jcq.entity.IMsg;
 import com.sobte.cqp.jcq.entity.IRequest;
@@ -8,12 +10,13 @@ import com.sobte.cqp.jcq.event.JcqAppAbstract;
 
 import javax.swing.*;
 import java.io.BufferedWriter;
-import java.lang.reflect.Type;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -31,10 +34,11 @@ import java.util.stream.Collectors;
 public class Demo extends JcqAppAbstract implements ICQVer, IMsg, IRequest {
     //private boolean chengeCard = false;
     //private double addLength = 0.0D;
+    private String appDirectory;
     private HashMap<Long, Long> coolDown;
     private HashMap<Long, Integer> ban;
     //private boolean enableDrag;
-    private List<Long> admin;
+    private Set<Long> admin;
     private JSONObject config;
 
     /**
@@ -45,16 +49,25 @@ public class Demo extends JcqAppAbstract implements ICQVer, IMsg, IRequest {
      */
     public static void main(String[] args) {
         // CQ此变量为特殊变量，在JCQ启动时实例化赋值给每个插件，而在测试中可以用CQDebug类来代替他
-        //CQ = new CQDebug();// new CQDebug("应用目录","应用名称") 可以用此构造器初始化应用的目录
-        //CQ.logInfo("[JCQ] TEST Demo", "测试启动");// 现在就可以用CQ变量来执行任何想要的操作了
+        CQ = new CQDebug("run", "chenji.length.demo");// new CQDebug("应用目录","应用名称") 可以用此构造器初始化应用的目录
+        CQ.logInfo("[JCQ] TEST Demo", "测试启动");// 现在就可以用CQ变量来执行任何想要的操作了
         // 要测试主类就先实例化一个主类对象
-        //Demo demo = new Demo();
+        Demo demo = new Demo();
         // 下面对主类进行各方法测试,按照JCQ运行过程，模拟实际情况
-        //demo.startup();// 程序运行开始 调用应用初始化方法
-        //demo.enable();// 程序初始化完成后，启用应用，让应用正常工作
-        //demo.exit();// 最后程序运行结束，调用exit方法
+        demo.startup();// 程序运行开始 调用应用初始化方法
+        demo.enable();// 程序初始化完成后，启用应用，让应用正常工作
+        demo.test();
+        demo.disable();
+        demo.exit();// 最后程序运行结束，调用exit方法
 
         //System.out.println(233);
+    }
+
+    public void test() {
+
+        coolDown.putIfAbsent(1294790523L, 23333L);
+        ban.putIfAbsent(1294790523L, 23333);
+        admin.add(1294790523L);
     }
 
     /**
@@ -79,19 +92,24 @@ public class Demo extends JcqAppAbstract implements ICQVer, IMsg, IRequest {
      *
      * @return 请固定返回0
      */
+    @SuppressWarnings("unchecked")
     public int startup() {
         //Arrays.asList(1582952890L, 390807154L, 1838115958L);
         // 获取应用数据目录(无需储存数据时，请将此行注释)
-        String appDirectory = CQ.getAppDirectory();
+        appDirectory = CQ.getAppDirectory();
         // 返回如：D:\CoolQ\app\com.sobte.cqp.jcq\app\com.example.demo\
         // 应用的所有数据、配置【必须】存放于此目录，避免给用户带来困扰。
         String configJson = getConfig(Paths.get(appDirectory, "config.json"));
         config = JSONObject.parseObject(configJson);
+        System.out.println(config);
         config.putIfAbsent("enableDrag", false);
         config.putIfAbsent("chengeCard", false);
-        admin = config.getJSONArray("admin").toJavaList(Long.class);
-        coolDown = config.getJSONObject("coolDown").toJavaObject((Type) HashMap.class);
-        ban = config.getJSONObject("ban").toJavaObject((Type) HashMap.class);
+        config.putIfAbsent("admin", new ArrayList<Long>());
+        config.putIfAbsent("coolDown", new HashMap<Long, Long>());
+        config.putIfAbsent("ban", new HashMap<Long, Integer>());
+        admin = new HashSet<>(config.getJSONArray("admin").toJavaList(Long.class));
+        coolDown = JSON.parseObject(config.getString("coolDown"), HashMap.class);
+        ban = JSON.parseObject(config.getString("ban"), HashMap.class);
         return 0;
     }
 
@@ -103,7 +121,6 @@ public class Demo extends JcqAppAbstract implements ICQVer, IMsg, IRequest {
      * @return 请固定返回0，返回后酷Q将很快关闭，请不要再通过线程等方式执行其他代码。
      */
     public int exit() {
-        saveConfig(Paths.get(appDirectory, "config.json"), config.toJSONString());
         return 0;
     }
 
@@ -131,9 +148,9 @@ public class Demo extends JcqAppAbstract implements ICQVer, IMsg, IRequest {
      */
     public int disable() {
         enable = false;
-        config.put("admin", admin);
-        config.put("coolDown", coolDown);
-        config.put("ban", ban);
+        config.put("admin", JSON.toJSONString(admin));
+        config.put("coolDown", JSON.toJSONString(coolDown));
+        config.put("ban", JSON.toJSONString(ban));
         saveConfig(Paths.get(appDirectory, "config.json"), config.toJSONString());
         return 0;
     }
@@ -170,12 +187,18 @@ public class Demo extends JcqAppAbstract implements ICQVer, IMsg, IRequest {
     private String getConfig(Path file) {
         String result = "";
         try {
+            if (!Files.exists(file.getParent())) {
+                Files.createDirectory(file.getParent());
+            }
+            if (!Files.exists(file)) {
+                Files.createFile(file);
+            }
             result = Files.lines(file).collect(Collectors.joining());
         } catch (Exception ex) {
             System.out.println("读取配置时出现错误");
             ex.printStackTrace();
         }
-        return result;
+        return result.equals("") ? "{}" : result;
     }
 
 
