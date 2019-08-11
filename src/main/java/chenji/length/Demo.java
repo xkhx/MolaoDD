@@ -7,9 +7,13 @@ import com.sobte.cqp.jcq.entity.IRequest;
 import com.sobte.cqp.jcq.event.JcqAppAbstract;
 
 import javax.swing.*;
-import java.io.*;
+import java.io.BufferedWriter;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.HashMap;
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * 本文件是JCQ插件的主类<br>
@@ -80,7 +84,7 @@ public class Demo extends JcqAppAbstract implements ICQVer, IMsg, IRequest {
         String appDirectory = CQ.getAppDirectory();
         // 返回如：D:\CoolQ\app\com.sobte.cqp.jcq\app\com.example.demo\
         // 应用的所有数据、配置【必须】存放于此目录，避免给用户带来困扰。
-        String configJson = getConfig(appDirectory + "\\" + "config.json");
+        String configJson = getConfig(Paths.get(appDirectory, "config.json"));
         JSONObject jsonObject = JSONObject.parseObject(configJson);
         config = jsonObject;
         admin = jsonObject.getJSONArray("admin").toJavaList(Long.class);
@@ -95,7 +99,7 @@ public class Demo extends JcqAppAbstract implements ICQVer, IMsg, IRequest {
      * @return 请固定返回0，返回后酷Q将很快关闭，请不要再通过线程等方式执行其他代码。
      */
     public int exit() {
-        saveConfig(appDirectory + "\\" + "config.json", config.toJSONString());
+        saveConfig(Paths.get(appDirectory, "config.json"), config.toJSONString());
         return 0;
     }
 
@@ -123,7 +127,7 @@ public class Demo extends JcqAppAbstract implements ICQVer, IMsg, IRequest {
      */
     public int disable() {
         enable = false;
-        saveConfig(appDirectory + "\\" + "config.json", config.toJSONString());
+        saveConfig(Paths.get(appDirectory, "config.json"), config.toJSONString());
         return 0;
     }
 
@@ -146,44 +150,25 @@ public class Demo extends JcqAppAbstract implements ICQVer, IMsg, IRequest {
         return MSG_IGNORE;
     }
 
-    private void saveConfig(String fileName, String data) {
-        File file = new File(fileName);
-        if (!file.exists()) {
-            try {
-                file.createNewFile();
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-        }
+    private void saveConfig(Path path, String data) {
         try {
-            BufferedWriter bufferedWriter = new BufferedWriter(new FileWriter(file));
+            BufferedWriter bufferedWriter = Files.newBufferedWriter(path);
             bufferedWriter.write(data);
             bufferedWriter.close();
-        } catch (IOException e) {
+        } catch (Exception e) {
             e.printStackTrace();
         }
     }
 
-    private String getConfig(String fileName) {
-        FileReader fileReader;
+    private String getConfig(Path file) {
+        String result = "";
         try {
-            fileReader = new FileReader(fileName);
-        } catch (FileNotFoundException e) {
-            return e.getMessage();
+            result = Files.lines(file).collect(Collectors.joining());
+        } catch (Exception ex) {
+            System.out.println("读取配置时出现错误");
+            ex.printStackTrace();
         }
-        BufferedReader bufferedReader = new BufferedReader(fileReader);
-        StringBuilder stringBuilder = new StringBuilder();
-        String line;
-        try {
-            line = bufferedReader.readLine();
-            while (line != null) {
-                stringBuilder.append(line);
-                line = bufferedReader.readLine();
-            }
-        } catch (IOException e) {
-            return e.getMessage();
-        }
-        return stringBuilder.toString();
+        return result;
     }
 
     public String toggle(String feature, boolean bool) {
