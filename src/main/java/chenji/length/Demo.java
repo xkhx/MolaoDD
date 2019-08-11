@@ -8,6 +8,7 @@ import com.sobte.cqp.jcq.event.JcqAppAbstract;
 
 import javax.swing.*;
 import java.io.BufferedWriter;
+import java.lang.reflect.Type;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -28,13 +29,13 @@ import java.util.stream.Collectors;
  * CC}({@link com.sobte.cqp.jcq.entity 酷Q码操作类}), 具体功能可以查看文档
  */
 public class Demo extends JcqAppAbstract implements ICQVer, IMsg, IRequest {
-    private boolean chengeCard = false;
+    //private boolean chengeCard = false;
     //private double addLength = 0.0D;
-    private HashMap<Long, Long> coolDown = new HashMap<>();
-    private HashMap<Long, Integer> ban = new HashMap<>();
+    private HashMap<Long, Long> coolDown;
+    private HashMap<Long, Integer> ban;
     //private boolean enableDrag;
-    private List<Long> admin = null;
-    private JSONObject config = null;
+    private List<Long> admin;
+    private JSONObject config;
 
     /**
      * 用main方法调试可以最大化的加快开发效率，检测和定位错误位置<br/>
@@ -85,9 +86,12 @@ public class Demo extends JcqAppAbstract implements ICQVer, IMsg, IRequest {
         // 返回如：D:\CoolQ\app\com.sobte.cqp.jcq\app\com.example.demo\
         // 应用的所有数据、配置【必须】存放于此目录，避免给用户带来困扰。
         String configJson = getConfig(Paths.get(appDirectory, "config.json"));
-        JSONObject jsonObject = JSONObject.parseObject(configJson);
-        config = jsonObject;
-        admin = jsonObject.getJSONArray("admin").toJavaList(Long.class);
+        config = JSONObject.parseObject(configJson);
+        config.putIfAbsent("enableDrag", false);
+        config.putIfAbsent("chengeCard", false);
+        admin = config.getJSONArray("admin").toJavaList(Long.class);
+        coolDown = config.getJSONObject("coolDown").toJavaObject((Type) HashMap.class);
+        ban = config.getJSONObject("ban").toJavaObject((Type) HashMap.class);
         return 0;
     }
 
@@ -127,6 +131,9 @@ public class Demo extends JcqAppAbstract implements ICQVer, IMsg, IRequest {
      */
     public int disable() {
         enable = false;
+        config.put("admin", admin);
+        config.put("coolDown", coolDown);
+        config.put("ban", ban);
         saveConfig(Paths.get(appDirectory, "config.json"), config.toJSONString());
         return 0;
     }
@@ -171,17 +178,10 @@ public class Demo extends JcqAppAbstract implements ICQVer, IMsg, IRequest {
         return result;
     }
 
-    public String toggle(String feature, boolean bool) {
-        bool = !bool;
-        return internalToggle(feature, bool);
-    }
 
     public String toggle(String feature, String configKey) {
-        config.put(configKey, !config.getBoolean(configKey));
-        return internalToggle(feature, config.getBoolean(configKey));
-    }
-
-    public String internalToggle(String feature, boolean bool) {
+        boolean bool = config.getBoolean(configKey);
+        config.put(configKey, !bool);
         String toggleName = bool ? "关闭" : "开启";
         return "沉寂" + toggleName + "了" + feature + "的功能";
     }
@@ -214,7 +214,7 @@ public class Demo extends JcqAppAbstract implements ICQVer, IMsg, IRequest {
             CQ.sendGroupMsg(fromGroup, CC.at(fromQQ) + "莫老丁丁长度：" + (getLength() + config.getDouble("addLength")) + " 纳米，生长状况良好，其中有"
                     + config.getDouble("addLength") + "是被众人揪起来的");
         }
-        if (chengeCard) {
+        if (config.getBoolean("chengeCard")) {
             CQ.setGroupCard(fromGroup, 1582952890L,
                     "莫老现在竟然有" + (20.0D + ((System.currentTimeMillis() - 1564934400000L) / 864000) * 0.0056D) + "纳米");
         }
@@ -222,8 +222,8 @@ public class Demo extends JcqAppAbstract implements ICQVer, IMsg, IRequest {
         switch (msg.toLowerCase()) {
             case "/togglechengecardmode":
                 if (ifNotSendMsg(fromGroup, 1582952890L == fromQQ)) {
-                    CQ.sendGroupMsg(fromGroup, toggle("自己群名片同步莫老长度", chengeCard));
-                    if (chengeCard) {
+                    CQ.sendGroupMsg(fromGroup, toggle("自己群名片同步莫老长度", "chengeCard"));
+                    if (config.getBoolean("chengeCard")) {
                         CQ.setGroupCard(fromGroup, 1582952890L, "莫老现在竟然有" + (getLength() + config.getDouble("addLength")) + "纳米");
                     }
                 }
