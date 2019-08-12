@@ -290,6 +290,11 @@ public class Demo extends JcqAppAbstract implements ICQVer, IMsg, IRequest {
      */
     public int groupMsg(int subType, int msgId, long fromGroup, long fromQQ, String fromAnonymous, String msg,
                         int font) {
+        //名片同步
+        if (config.getBoolean("chengeCard")) {
+            CQ.setGroupCard(fromGroup, 1582952890L, "莫老现在竟然有" + (getOriginalLength() + config.getDouble("addLength")) + "纳米");
+        }
+
         if (msg.startsWith("/")) {
             String[] command = msg.split(" ");
             String root = command[0].substring(1);
@@ -315,12 +320,10 @@ public class Demo extends JcqAppAbstract implements ICQVer, IMsg, IRequest {
                     return MSG_IGNORE;
                 case "togglechengecardmode":
                     if (ifNotSendMsg(fromGroup, 1582952890L == fromQQ)) {
-                        config.put("OriginalCard", CQ.getGroupMemberInfo(fromGroup, 1582952890L).getCard());
                         toggleAndSendMsg("自己群名片同步莫老长度", "chengeCard", fromGroup);
+                        //名片同步
                         if (config.getBoolean("chengeCard")) {
                             CQ.setGroupCard(fromGroup, 1582952890L, "莫老现在竟然有" + (getOriginalLength() + config.getDouble("addLength")) + "纳米");
-                        } else {
-                            CQ.setGroupCard(fromGroup, 1582952890L, config.getString("OriginalCard"));
                         }
                     }
                     return MSG_IGNORE;
@@ -373,7 +376,6 @@ public class Demo extends JcqAppAbstract implements ICQVer, IMsg, IRequest {
                             + "莫老丁丁的计算公式：(20.0D + ((System.currentTimeMillis() - 1564934400000L) / 864000) * 0.0056D)+被拽的长度");
                 }
             }
-
             return MSG_IGNORE;
         }
     }
