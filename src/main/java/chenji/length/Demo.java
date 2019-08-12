@@ -70,6 +70,9 @@ public class Demo extends JcqAppAbstract implements ICQVer, IMsg, IRequest {
             demo.groupMsg(1, i, i, i, "false", "/drag", 56);
         }
         // demo.groupMsg(1, 233, 233, 1294790523, "false", "/cut 2200", 56);
+        demo.groupMsg(1, 1, 1, 1, "false", "/拽长排行", 56);
+        demo.groupMsg(1, 1, 1, 1, "false", "/拽断排行", 56);
+        demo.groupMsg(1, 1, 1, 1, "false", "/贡献排行", 56);
         System.out.println(demo.cutDDMap.size());
         System.out.println(demo.addDDMap.size());
         System.out.println(demo.getCurrentLength());
