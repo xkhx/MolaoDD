@@ -151,6 +151,12 @@ public class Demo extends JcqAppAbstract implements ICQVer, IMsg, IRequest {
      * @return 请固定返回0，返回后酷Q将很快关闭，请不要再通过线程等方式执行其他代码。
      */
     public int exit() {
+        config.put("admin", JSON.toJSON(admin));
+        config.put("coolDown", JSON.toJSON(coolDown));
+        config.put("ban", JSON.toJSON(ban));
+        config.put("cutDDMap", JSON.toJSON(cutDDMap));
+        config.put("addDDMap", JSON.toJSON(addDDMap));
+        saveConfig(Paths.get(appDirectory, "config.json"), config.toJSONString());
         return 0;
     }
 
@@ -267,12 +273,6 @@ public class Demo extends JcqAppAbstract implements ICQVer, IMsg, IRequest {
      */
     public int disable() {
         enable = false;
-        config.put("admin", JSON.toJSON(admin));
-        config.put("coolDown", JSON.toJSON(coolDown));
-        config.put("ban", JSON.toJSON(ban));
-        config.put("cutDDMap", JSON.toJSON(cutDDMap));
-        config.put("addDDMap", JSON.toJSON(addDDMap));
-        saveConfig(Paths.get(appDirectory, "config.json"), config.toJSONString());
         return 0;
     }
 
