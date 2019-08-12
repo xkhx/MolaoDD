@@ -343,6 +343,8 @@ public class Demo extends JcqAppAbstract implements ICQVer, IMsg, IRequest {
                     if (ifNotSendMsg(fromGroup, admin.contains(fromQQ))) {
                         double cut = checkArgAndParseDouble(args, "输入要切断的数字", fromGroup);
                         if (!Double.isNaN(cut)) {
+                            //防止addLength为负数
+                            cut = subtract(config.getDouble("addLength"), cut) < 0 ? config.getDouble("addLength") : cut;
                             changeValue("addLength", cut, OperatorHelper::subtract);
                             CQ.sendGroupMsg(fromGroup, CC.at(fromQQ) + "[切丁丁] oh! 你切掉了莫老的丁丁" + cut + "纳米");
                         }
