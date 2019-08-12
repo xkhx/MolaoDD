@@ -38,6 +38,9 @@ public class Demo extends JcqAppAbstract implements ICQVer, IMsg, IRequest {
     private String appDirectory;
     private HashMap<Long, Long> coolDown;
     private HashMap<Long, Integer> ban;
+    private LinkedHashMap<Long, Double> cutDDMap;
+    private LinkedHashMap<Long, Double> addDDMap;
+    private LinkedHashMap<Long, Double> totalDDMap = new LinkedHashMap<>();
     //private boolean enableDrag;
     private Set<Long> admin;
     private JSONObject config;
@@ -58,9 +61,17 @@ public class Demo extends JcqAppAbstract implements ICQVer, IMsg, IRequest {
         // 下面对主类进行各方法测试,按照JCQ运行过程，模拟实际情况
         demo.startup();// 程序运行开始 调用应用初始化方法
         demo.enable();// 程序初始化完成后，启用应用，让应用正常工作
-        System.out.println(demo.getLength());
+        demo.ban.clear();
+        demo.coolDown.clear();
+        for (int i = 0; i < 5; i++) {
+            demo.groupMsg(1, i, i, i, "false", "/拽长排行", 56);
+            demo.groupMsg(1, i, i, i, "false", "/拽断排行", 56);
+            demo.groupMsg(1, i, i, i, "false", "/贡献排行", 56);
+        }
+        System.out.println(demo.getOriginalLength());
         System.out.println(demo.getCurrentLength());
         demo.disable();
+
         demo.exit();// 最后程序运行结束，调用exit方法
 
         //System.out.println(233);
@@ -80,6 +91,10 @@ public class Demo extends JcqAppAbstract implements ICQVer, IMsg, IRequest {
         return CQAPIVER + "," + AppID;
     }
 
+    public static Comparator<Double> reserved(Comparator<Double> comparator) {
+        return comparator.reversed();
+    }
+
     /**
      * 酷Q启动 (Type=1001)<br>
      * 本方法会在酷Q【主线程】中被调用。<br>
@@ -95,21 +110,37 @@ public class Demo extends JcqAppAbstract implements ICQVer, IMsg, IRequest {
         appDirectory = CQ.getAppDirectory();
         // 返回如：D:\CoolQ\app\com.sobte.cqp.jcq\app\com.example.demo\
         // 应用的所有数据、配置【必须】存放于此目录，避免给用户带来困扰。
+        long time = System.currentTimeMillis();
+        initJSON();
+        loadJSON();
+        updateTotalMap();
+        System.out.println("Time:" + (System.currentTimeMillis() - time) + "ms");
+        return 0;
+    }
+
+    void initJSON() {
         String configJson = getConfig(Paths.get(appDirectory, "config.json"));
         config = JSONObject.parseObject(configJson);
-        System.out.println(config);
         config.putIfAbsent("addLength", 0.0D);
         config.putIfAbsent("enableDrag", false);
         config.putIfAbsent("chengeCard", false);
         config.putIfAbsent("admin", "[]");
         config.putIfAbsent("coolDown", new HashMap<Long, Long>());
         config.putIfAbsent("ban", new HashMap<Long, Integer>());
+        config.putIfAbsent("cutDDMap", new LinkedHashMap<Long, Double>());
+        config.putIfAbsent("addDDMap", new LinkedHashMap<Long, Double>());
+    }
+
+    void loadJSON() {
         admin = new HashSet<>(config.getJSONArray("admin").toJavaList(Long.class));
         coolDown = config.getJSONObject("coolDown").toJavaObject(new TypeReference<HashMap<Long, Long>>() {
         }.getType());
         ban = config.getJSONObject("coolDown").toJavaObject(new TypeReference<HashMap<Long, Integer>>() {
         }.getType());
-        return 0;
+        cutDDMap = config.getJSONObject("cutDDMap").toJavaObject(new TypeReference<LinkedHashMap<Long, Double>>() {
+        }.getType());
+        addDDMap = config.getJSONObject("addDDMap").toJavaObject(new TypeReference<LinkedHashMap<Long, Double>>() {
+        }.getType());
     }
 
     /**
@@ -137,21 +168,10 @@ public class Demo extends JcqAppAbstract implements ICQVer, IMsg, IRequest {
         return 0;
     }
 
-    /**
-     * 应用将被停用 (Type=1004)<br>
-     * 当应用被停用前，将收到此事件。<br>
-     * 如果酷Q载入时应用已被停用，则本函数【不会】被调用。<br>
-     * 无论本应用是否被启用，酷Q关闭前本函数都【不会】被调用。
-     *
-     * @return 请固定返回0。
-     */
-    public int disable() {
-        enable = false;
-        config.put("admin", JSON.toJSON(admin));
-        config.put("coolDown", JSON.toJSON(coolDown));
-        config.put("ban", JSON.toJSON(ban));
-        saveConfig(Paths.get(appDirectory, "config.json"), config.toJSONString());
-        return 0;
+    void updateTotalMap() {
+        totalDDMap.clear();
+        totalDDMap.putAll(cutDDMap);
+        addDDMap.forEach((k, v) -> totalDDMap.merge(k, v, OperatorHelper::add));
     }
 
     /**
@@ -236,6 +256,24 @@ public class Demo extends JcqAppAbstract implements ICQVer, IMsg, IRequest {
         return bool;
     }
 
+    /**
+     * 应用将被停用 (Type=1004)<br>
+     * 当应用被停用前，将收到此事件。<br>
+     * 如果酷Q载入时应用已被停用，则本函数【不会】被调用。<br>
+     * 无论本应用是否被启用，酷Q关闭前本函数都【不会】被调用。
+     *
+     * @return 请固定返回0。
+     */
+    public int disable() {
+        enable = false;
+        config.put("admin", JSON.toJSON(admin));
+        config.put("coolDown", JSON.toJSON(coolDown));
+        config.put("ban", JSON.toJSON(ban));
+        config.put("cutDDMap", JSON.toJSON(cutDDMap));
+        config.put("addDDMap", JSON.toJSON(addDDMap));
+        saveConfig(Paths.get(appDirectory, "config.json"), config.toJSONString());
+        return 0;
+    }
 
     /**
      * 群消息 (Type=2)<br>
@@ -252,7 +290,6 @@ public class Demo extends JcqAppAbstract implements ICQVer, IMsg, IRequest {
      */
     public int groupMsg(int subType, int msgId, long fromGroup, long fromQQ, String fromAnonymous, String msg,
                         int font) {
-
         if (msg.startsWith("/")) {
             String[] command = msg.split(" ");
             String root = command[0].substring(1);
@@ -266,12 +303,22 @@ public class Demo extends JcqAppAbstract implements ICQVer, IMsg, IRequest {
                 case "length":
                     sendLengthMsg(fromGroup, fromQQ);
                     return MSG_IGNORE;
+                case "拽长排行":
+                    CQ.sendGroupMsg(fromGroup, CC.at(fromQQ) + "\n拽长前十排行：\n" + addDDMap.entrySet().stream().sorted(Map.Entry.comparingByValue(reserved(Double::compare))).limit(10).map(entry -> "QQ：" + entry.getKey() + "|贡献长度：" + entry.getValue()).collect(Collectors.joining("\n")));
+                    return MSG_IGNORE;
+                case "拽断排行":
+                    CQ.sendGroupMsg(fromGroup, CC.at(fromQQ) + "\n拽断前十排行：\n" + totalDDMap.entrySet().stream().sorted(Map.Entry.comparingByValue(Double::compare)).limit(10).map(entry -> "QQ：" + entry.getKey() + "|贡献长度：" + entry.getValue()).collect(Collectors.joining("\n")));
+                    return MSG_IGNORE;
+                case "贡献排行":
+                    updateTotalMap();
+                    CQ.sendGroupMsg(fromGroup, CC.at(fromQQ) + "\n贡献前十排行：\n" + totalDDMap.entrySet().stream().sorted(Map.Entry.comparingByValue(reserved(Double::compare))).limit(10).map(entry -> "QQ：" + entry.getKey() + "|贡献长度：" + entry.getValue()).collect(Collectors.joining("\n")));
+                    return MSG_IGNORE;
                 case "togglechengecardmode":
                     if (ifNotSendMsg(fromGroup, 1582952890L == fromQQ)) {
                         config.put("OriginalCard", CQ.getGroupMemberInfo(fromGroup, 1582952890L).getCard());
                         toggleAndSendMsg("自己群名片同步莫老长度", "chengeCard", fromGroup);
                         if (config.getBoolean("chengeCard")) {
-                            CQ.setGroupCard(fromGroup, 1582952890L, "莫老现在竟然有" + (getLength() + config.getDouble("addLength")) + "纳米");
+                            CQ.setGroupCard(fromGroup, 1582952890L, "莫老现在竟然有" + (getOriginalLength() + config.getDouble("addLength")) + "纳米");
                         } else {
                             CQ.setGroupCard(fromGroup, 1582952890L, config.getString("OriginalCard"));
                         }
@@ -332,13 +379,13 @@ public class Demo extends JcqAppAbstract implements ICQVer, IMsg, IRequest {
     }
 
     private void sendLengthMsg(long fromGroup, long fromQQ) {
-        CQ.sendGroupMsg(fromGroup, CC.at(fromQQ) + "莫老丁丁长度：" + (getLength() + config.getDouble("addLength")) + " 纳米，生长状况良好，其中有" + config.getDouble("addLength") + "是被众人揪起来的");
+        CQ.sendGroupMsg(fromGroup, CC.at(fromQQ) + "莫老丁丁长度：" + (getOriginalLength() + config.getDouble("addLength")) + " 纳米，生长状况良好，其中有" + config.getDouble("addLength") + "是被众人揪起来的");
     }
 
     private void drag(long fromGroup, long fromQQ) {
         if (isCooling(fromQQ, fromGroup)) {
-            double length = toTwoPrecision(random.nextDouble() * 10d);
-            if (length == 0.0D) {
+            double length = random.nextDouble() * 10d;
+            if (length == 0.0d) {
                 CQ.sendGroupMsg(fromGroup, CC.at(fromQQ) + "[拽丁丁]震惊，竟然没拽动莫老的丁丁，现在有"
                         + getCurrentLength() + "纳米  " + getDisplay(getCurrentLength()));
                 return;
@@ -346,13 +393,17 @@ public class Demo extends JcqAppAbstract implements ICQVer, IMsg, IRequest {
             if (fromQQ == 602723113L || random.nextInt(100) < 10) {
                 length = -length * 10 - 5;
             }
+            //保留两位小数并确保最小值为±0.01
+            length = length > 0 ? Math.max(toTwoPrecision(length), 0.01) : Math.max(toTwoPrecision(length), -0.01);
             //防止addLength为负数
             length = add(length, config.getDouble("addLength")) < 0 ? -config.getDouble("addLength") : length;
             changeValue("addLength", length, OperatorHelper::add);
             if (length < 0) {
+                cutDDMap.merge(fromQQ, length, OperatorHelper::add);
                 CQ.sendGroupMsg(fromGroup, CC.at(fromQQ) + "[拽丁丁]震惊，竟然拽断了" + Math.abs(length) + "纳米，现在有"
                         + getCurrentLength() + "纳米 \n" + getDisplay(getCurrentLength()));
             } else {
+                addDDMap.merge(fromQQ, length, OperatorHelper::add);
                 CQ.sendGroupMsg(fromGroup, CC.at(fromQQ) + "[拽丁丁]拽长了" + length + "纳米，现在有"
                         + getCurrentLength() + "纳米 \n" + getDisplay(getCurrentLength()));
             }
@@ -360,9 +411,10 @@ public class Demo extends JcqAppAbstract implements ICQVer, IMsg, IRequest {
     }
 
     private double getCurrentLength() {
-        return add(getLength(), config.getDouble("addLength"));
+        return add(getOriginalLength(), config.getDouble("addLength"));
     }
-    private double getLength() {
+
+    private double getOriginalLength() {
         //(20.0D + ((System.currentTimeMillis() - 1564934400000L) / 864000) * 0.0056D)
         return add(20.0D, multiply(divide(System.currentTimeMillis() - 1564934400000L, 864000L), 0.0056D));
     }
