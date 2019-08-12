@@ -3,7 +3,6 @@ package chenji.length;
 import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.JSONObject;
 import com.alibaba.fastjson.TypeReference;
-import com.sobte.cqp.jcq.entity.CQDebug;
 import com.sobte.cqp.jcq.entity.ICQVer;
 import com.sobte.cqp.jcq.entity.IMsg;
 import com.sobte.cqp.jcq.entity.IRequest;
@@ -53,7 +52,7 @@ public class Demo extends JcqAppAbstract implements ICQVer, IMsg, IRequest {
      * @param args 系统参数
      */
     public static void main(String[] args) {
-        // CQ此变量为特殊变量，在JCQ启动时实例化赋值给每个插件，而在测试中可以用CQDebug类来代替他
+        /*// CQ此变量为特殊变量，在JCQ启动时实例化赋值给每个插件，而在测试中可以用CQDebug类来代替他
         CQ = new CQDebug("run", "chenji.length.demo");// new CQDebug("应用目录","应用名称") 可以用此构造器初始化应用的目录
         CQ.logInfo("[JCQ] TEST Demo", "测试启动");// 现在就可以用CQ变量来执行任何想要的操作了
         // 要测试主类就先实例化一个主类对象
@@ -73,7 +72,7 @@ public class Demo extends JcqAppAbstract implements ICQVer, IMsg, IRequest {
         System.out.println(demo.getCurrentLength());
         demo.disable();
 
-        demo.exit();// 最后程序运行结束，调用exit方法
+        demo.exit();// 最后程序运行结束，调用exit方法*/
 
         //System.out.println(233);
     }
@@ -108,14 +107,14 @@ public class Demo extends JcqAppAbstract implements ICQVer, IMsg, IRequest {
     public int startup() {
         //Arrays.asList(1582952890L, 390807154L, 1838115958L);
         // 获取应用数据目录(无需储存数据时，请将此行注释)
-        appDirectory = CQ.getAppDirectory();
+        appDirectory = "MolaoDD";
         // 返回如：D:\CoolQ\app\com.sobte.cqp.jcq\app\com.example.demo\
         // 应用的所有数据、配置【必须】存放于此目录，避免给用户带来困扰。
         long time = System.currentTimeMillis();
         initJSON();
         loadJSON();
         updateTotalMap();
-        System.out.println("Time:" + (System.currentTimeMillis() - time) + "ms");
+        System.out.println("莫老拽丁丁插件初始化耗时:" + (System.currentTimeMillis() - time) + "ms");
         return 0;
     }
 
