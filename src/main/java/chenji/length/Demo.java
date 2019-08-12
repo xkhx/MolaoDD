@@ -68,6 +68,7 @@ public class Demo extends JcqAppAbstract implements ICQVer, IMsg, IRequest {
             demo.groupMsg(1, i, i, i, "false", "/拽断排行", 56);
             demo.groupMsg(1, i, i, i, "false", "/贡献排行", 56);
         }
+        demo.groupMsg(1, 233, 233, 1294790523, "false", "/cut 2200", 56);
         System.out.println(demo.getOriginalLength());
         System.out.println(demo.getCurrentLength());
         demo.disable();
@@ -250,7 +251,7 @@ public class Demo extends JcqAppAbstract implements ICQVer, IMsg, IRequest {
     }
 
     public boolean ifNotSendMsg(long group, boolean bool) {
-        if (bool) {
+        if (!bool) {
             CQ.sendGroupMsg(group, "沉寂觉得你没权限来这样做呢，请你立即女装呢");
         }
         return bool;
