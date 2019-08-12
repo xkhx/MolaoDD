@@ -2,6 +2,8 @@ package chenji.length;
 
 import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.JSONObject;
+import com.alibaba.fastjson.TypeReference;
+import com.alibaba.fastjson.parser.Feature;
 import com.sobte.cqp.jcq.entity.CQDebug;
 import com.sobte.cqp.jcq.entity.ICQVer;
 import com.sobte.cqp.jcq.entity.IMsg;
@@ -13,7 +15,6 @@ import java.io.BufferedWriter;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Set;
@@ -56,18 +57,10 @@ public class Demo extends JcqAppAbstract implements ICQVer, IMsg, IRequest {
         // 下面对主类进行各方法测试,按照JCQ运行过程，模拟实际情况
         demo.startup();// 程序运行开始 调用应用初始化方法
         demo.enable();// 程序初始化完成后，启用应用，让应用正常工作
-        demo.test();
         demo.disable();
         demo.exit();// 最后程序运行结束，调用exit方法
 
         //System.out.println(233);
-    }
-
-    public void test() {
-
-        coolDown.putIfAbsent(1294790523L, 23333L);
-        ban.putIfAbsent(1294790523L, 23333);
-        admin.add(1294790523L);
     }
 
     /**
@@ -92,7 +85,7 @@ public class Demo extends JcqAppAbstract implements ICQVer, IMsg, IRequest {
      *
      * @return 请固定返回0
      */
-    @SuppressWarnings("unchecked")
+
     public int startup() {
         //Arrays.asList(1582952890L, 390807154L, 1838115958L);
         // 获取应用数据目录(无需储存数据时，请将此行注释)
@@ -100,16 +93,18 @@ public class Demo extends JcqAppAbstract implements ICQVer, IMsg, IRequest {
         // 返回如：D:\CoolQ\app\com.sobte.cqp.jcq\app\com.example.demo\
         // 应用的所有数据、配置【必须】存放于此目录，避免给用户带来困扰。
         String configJson = getConfig(Paths.get(appDirectory, "config.json"));
-        config = JSONObject.parseObject(configJson);
+        config = JSONObject.parseObject(configJson, Feature.AllowArbitraryCommas, Feature.UseObjectArray);
         System.out.println(config);
         config.putIfAbsent("enableDrag", false);
         config.putIfAbsent("chengeCard", false);
-        config.putIfAbsent("admin", new ArrayList<Long>());
+        config.putIfAbsent("admin", "[]");
         config.putIfAbsent("coolDown", new HashMap<Long, Long>());
         config.putIfAbsent("ban", new HashMap<Long, Integer>());
         admin = new HashSet<>(config.getJSONArray("admin").toJavaList(Long.class));
-        coolDown = JSON.parseObject(config.getString("coolDown"), HashMap.class);
-        ban = JSON.parseObject(config.getString("ban"), HashMap.class);
+        coolDown = config.getJSONObject("coolDown").toJavaObject(new TypeReference<HashMap<Long, Long>>() {
+        }.getType());
+        ban = config.getJSONObject("coolDown").toJavaObject(new TypeReference<HashMap<Long, Integer>>() {
+        }.getType());
         return 0;
     }
 
@@ -148,9 +143,9 @@ public class Demo extends JcqAppAbstract implements ICQVer, IMsg, IRequest {
      */
     public int disable() {
         enable = false;
-        config.put("admin", JSON.toJSONString(admin));
-        config.put("coolDown", JSON.toJSONString(coolDown));
-        config.put("ban", JSON.toJSONString(ban));
+        config.put("admin", JSON.toJSON(admin));
+        config.put("coolDown", JSON.toJSON(coolDown));
+        config.put("ban", JSON.toJSON(ban));
         saveConfig(Paths.get(appDirectory, "config.json"), config.toJSONString());
         return 0;
     }
