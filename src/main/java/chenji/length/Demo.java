@@ -212,6 +212,7 @@ public class Demo extends JcqAppAbstract implements ICQVer, IMsg, IRequest {
             if (!Files.exists(file)) {
                 Files.createFile(file);
             }
+            System.out.println(file.toRealPath());
             result = Files.lines(file).collect(Collectors.joining());
         } catch (Exception ex) {
             System.out.println("读取配置时出现错误");
@@ -389,7 +390,7 @@ public class Demo extends JcqAppAbstract implements ICQVer, IMsg, IRequest {
     private void drag(long fromGroup, long fromQQ) {
         if (isCooling(fromQQ, fromGroup)) {
             double length = random.nextDouble() * 10d;
-            if (length == 0.0d) {
+            if (length == 0.0d || length == -0.0d) {
                 CQ.sendGroupMsg(fromGroup, CC.at(fromQQ) + "[拽丁丁]震惊，竟然没拽动莫老的丁丁，现在有"
                         + getCurrentLength() + "纳米  " + getDisplay(getCurrentLength()));
                 return;
