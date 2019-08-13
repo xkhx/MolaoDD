@@ -3,10 +3,7 @@ package chenji.length;
 import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.JSONObject;
 import com.alibaba.fastjson.TypeReference;
-import com.sobte.cqp.jcq.entity.CQDebug;
-import com.sobte.cqp.jcq.entity.ICQVer;
-import com.sobte.cqp.jcq.entity.IMsg;
-import com.sobte.cqp.jcq.entity.IRequest;
+import com.sobte.cqp.jcq.entity.*;
 import com.sobte.cqp.jcq.event.JcqAppAbstract;
 
 import javax.swing.*;
@@ -279,7 +276,8 @@ public class Demo extends JcqAppAbstract implements ICQVer, IMsg, IRequest {
     }
 
     public String getCardName(long group, long qq) {
-        return CQ.getGroupMemberInfo(group, qq).getCard();
+        Member member = CQ.getGroupMemberInfo(group, qq);
+        return member.getCard().equals("") ? member.getNick() : member.getCard();
     }
 
     /**
