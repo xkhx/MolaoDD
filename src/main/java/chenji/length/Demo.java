@@ -444,10 +444,15 @@ public class Demo extends JcqAppAbstract implements ICQVer, IMsg, IRequest {
     }
 
     private String getDisplay(double l) {
-        StringBuilder sb = new StringBuilder("8");
+        //获取整数长度并-1乘10作为单位
+        int unit = (Integer.valueOf((int) l).toString().length() - 1) * 10;
+        //"(x"+unit+")\n8"
+        StringBuilder sb = new StringBuilder("(x");
+        sb.append(unit);
+        sb.append(")\n8");
         while (l >= 1) {
             sb.append('=');
-            l -= 10d;
+            l -= unit;
         }
         sb.append('>');
         return sb.toString();
