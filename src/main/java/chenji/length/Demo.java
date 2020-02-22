@@ -1,15 +1,21 @@
 package chenji.length;
 
+import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.JSONObject;
-import com.sobte.cqp.jcq.entity.ICQVer;
-import com.sobte.cqp.jcq.entity.IMsg;
-import com.sobte.cqp.jcq.entity.IRequest;
+import com.alibaba.fastjson.TypeReference;
+import com.sobte.cqp.jcq.entity.*;
 import com.sobte.cqp.jcq.event.JcqAppAbstract;
 
 import javax.swing.*;
-import java.io.*;
-import java.util.HashMap;
-import java.util.List;
+import java.io.BufferedWriter;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.*;
+import java.util.function.BiFunction;
+import java.util.stream.Collectors;
+
+import static chenji.length.OperatorHelper.*;
 
 /**
  * 本文件是JCQ插件的主类<br>
@@ -24,11 +30,18 @@ import java.util.List;
  * CC}({@link com.sobte.cqp.jcq.entity 酷Q码操作类}), 具体功能可以查看文档
  */
 public class Demo extends JcqAppAbstract implements ICQVer, IMsg, IRequest {
-    private boolean chengeCard = false;
+    //private boolean chengeCard = false;
     //private double addLength = 0.0D;
-    private HashMap<Long, Long> coolDown = new HashMap<>();
-    private HashMap<Long, Integer> ban = new HashMap<>();
+    private String appDirectory;
+    private HashMap<Long, Long> coolDown;
+    private HashMap<Long, Integer> ban;
+    private LinkedHashMap<Long, Double> cutDDMap;
+    private LinkedHashMap<Long, Double> addDDMap;
+    private LinkedHashMap<Long, Double> totalDDMap = new LinkedHashMap<>();
     //private boolean enableDrag;
+    private Set<Long> admin;
+    private JSONObject config;
+    private Random random = new Random();
 
     /**
      * 用main方法调试可以最大化的加快开发效率，检测和定位错误位置<br/>
@@ -38,14 +51,32 @@ public class Demo extends JcqAppAbstract implements ICQVer, IMsg, IRequest {
      */
     public static void main(String[] args) {
         // CQ此变量为特殊变量，在JCQ启动时实例化赋值给每个插件，而在测试中可以用CQDebug类来代替他
-        //CQ = new CQDebug();// new CQDebug("应用目录","应用名称") 可以用此构造器初始化应用的目录
-        //CQ.logInfo("[JCQ] TEST Demo", "测试启动");// 现在就可以用CQ变量来执行任何想要的操作了
+        CQ = new CQDebug("run", "chenji.length.demo");// new CQDebug("应用目录","应用名称") 可以用此构造器初始化应用的目录
+        CQ.logInfo("[JCQ] TEST Demo", "测试启动");// 现在就可以用CQ变量来执行任何想要的操作了
         // 要测试主类就先实例化一个主类对象
-        //Demo demo = new Demo();
+        Demo demo = new Demo();
         // 下面对主类进行各方法测试,按照JCQ运行过程，模拟实际情况
-        //demo.startup();// 程序运行开始 调用应用初始化方法
-        //demo.enable();// 程序初始化完成后，启用应用，让应用正常工作
-        //demo.exit();// 最后程序运行结束，调用exit方法
+        demo.startup();// 程序运行开始 调用应用初始化方法
+        demo.enable();// 程序初始化完成后，启用应用，让应用正常工作
+        demo.ban.clear();
+        demo.coolDown.clear();
+        demo.cutDDMap.clear();
+        demo.addDDMap.clear();
+        demo.config.put("enableDrag", true);
+        for (int i = 0; i < 1000; i++) {
+            demo.groupMsg(1, i, i, i, "false", "/drag", 56);
+        }
+        // demo.groupMsg(1, 233, 233, 1294790523, "false", "/cut 2200", 56);
+        demo.groupMsg(1, 1, 1, 1, "false", "/拽长排行", 56);
+        demo.groupMsg(1, 1, 1, 1, "false", "/拽断排行", 56);
+        demo.groupMsg(1, 1, 1, 1, "false", "/贡献排行", 56);
+        System.out.println(demo.cutDDMap.size());
+        System.out.println(demo.addDDMap.size());
+        System.out.println(demo.getCurrentLength());
+        System.out.println(demo.getOriginalLength());
+        demo.disable();
+
+        demo.exit();// 最后程序运行结束，调用exit方法*/
 
         //System.out.println(233);
     }
@@ -64,9 +95,9 @@ public class Demo extends JcqAppAbstract implements ICQVer, IMsg, IRequest {
         return CQAPIVER + "," + AppID;
     }
 
-
-    private List<Long> admin = null;
-    private JSONObject config = null;
+    public static Comparator<Double> reserved(Comparator<Double> comparator) {
+        return comparator.reversed();
+    }
 
     /**
      * 酷Q启动 (Type=1001)<br>
@@ -76,17 +107,44 @@ public class Demo extends JcqAppAbstract implements ICQVer, IMsg, IRequest {
      *
      * @return 请固定返回0
      */
+
     public int startup() {
         //Arrays.asList(1582952890L, 390807154L, 1838115958L);
         // 获取应用数据目录(无需储存数据时，请将此行注释)
-        String appDirectory = CQ.getAppDirectory();
+        appDirectory = "MolaoDD";
         // 返回如：D:\CoolQ\app\com.sobte.cqp.jcq\app\com.example.demo\
         // 应用的所有数据、配置【必须】存放于此目录，避免给用户带来困扰。
-        String configJson = getConfig(appDirectory + "\\" + "config.json");
-        JSONObject jsonObject = JSONObject.parseObject(configJson);
-        config = jsonObject;
-        admin = jsonObject.getJSONArray("admin").toJavaList(Long.class);
+        long time = System.currentTimeMillis();
+        initJSON();
+        loadJSON();
+        updateTotalMap();
+        System.out.println("莫老拽丁丁插件初始化耗时:" + (System.currentTimeMillis() - time) + "ms");
         return 0;
+    }
+
+    void initJSON() {
+        String configJson = getConfig(Paths.get(appDirectory, "config.json"));
+        config = JSONObject.parseObject(configJson);
+        config.putIfAbsent("addLength", 0.0D);
+        config.putIfAbsent("enableDrag", false);
+        config.putIfAbsent("chengeCard", false);
+        config.putIfAbsent("admin", "[1838115958]");
+        config.putIfAbsent("coolDown", new HashMap<Long, Long>());
+        config.putIfAbsent("ban", new HashMap<Long, Integer>());
+        config.putIfAbsent("cutDDMap", new LinkedHashMap<Long, Double>());
+        config.putIfAbsent("addDDMap", new LinkedHashMap<Long, Double>());
+    }
+
+    void loadJSON() {
+        admin = new HashSet<>(config.getJSONArray("admin").toJavaList(Long.class));
+        coolDown = config.getJSONObject("coolDown").toJavaObject(new TypeReference<HashMap<Long, Long>>() {
+        }.getType());
+        ban = config.getJSONObject("coolDown").toJavaObject(new TypeReference<HashMap<Long, Integer>>() {
+        }.getType());
+        cutDDMap = config.getJSONObject("cutDDMap").toJavaObject(new TypeReference<LinkedHashMap<Long, Double>>() {
+        }.getType());
+        addDDMap = config.getJSONObject("addDDMap").toJavaObject(new TypeReference<LinkedHashMap<Long, Double>>() {
+        }.getType());
     }
 
     /**
@@ -97,7 +155,12 @@ public class Demo extends JcqAppAbstract implements ICQVer, IMsg, IRequest {
      * @return 请固定返回0，返回后酷Q将很快关闭，请不要再通过线程等方式执行其他代码。
      */
     public int exit() {
-        saveConfig(appDirectory + "\\" + "config.json", config.toJSONString());
+        config.put("admin", JSON.toJSON(admin));
+        config.put("coolDown", JSON.toJSON(coolDown));
+        config.put("ban", JSON.toJSON(ban));
+        config.put("cutDDMap", JSON.toJSON(cutDDMap));
+        config.put("addDDMap", JSON.toJSON(addDDMap));
+        saveConfig(Paths.get(appDirectory, "config.json"), config.toJSONString());
         return 0;
     }
 
@@ -115,18 +178,10 @@ public class Demo extends JcqAppAbstract implements ICQVer, IMsg, IRequest {
         return 0;
     }
 
-    /**
-     * 应用将被停用 (Type=1004)<br>
-     * 当应用被停用前，将收到此事件。<br>
-     * 如果酷Q载入时应用已被停用，则本函数【不会】被调用。<br>
-     * 无论本应用是否被启用，酷Q关闭前本函数都【不会】被调用。
-     *
-     * @return 请固定返回0。
-     */
-    public int disable() {
-        enable = false;
-        saveConfig(appDirectory + "\\" + "config.json", config.toJSONString());
-        return 0;
+    void updateTotalMap() {
+        totalDDMap.clear();
+        totalDDMap.putAll(cutDDMap);
+        addDDMap.forEach((k, v) -> totalDDMap.merge(k, v, OperatorHelper::add));
     }
 
     /**
@@ -148,44 +203,94 @@ public class Demo extends JcqAppAbstract implements ICQVer, IMsg, IRequest {
         return MSG_IGNORE;
     }
 
-    private void saveConfig(String fileName, String data) {
-        File file = new File(fileName);
-        if (!file.exists()) {
-            try {
-                file.createNewFile();
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-        }
+    private void saveConfig(Path path, String data) {
         try {
-            BufferedWriter bufferedWriter = new BufferedWriter(new FileWriter(file));
+            BufferedWriter bufferedWriter = Files.newBufferedWriter(path);
             bufferedWriter.write(data);
             bufferedWriter.close();
-        } catch (IOException e) {
+        } catch (Exception e) {
             e.printStackTrace();
         }
     }
 
-    private String getConfig(String fileName) {
-        FileReader fileReader;
+    private String getConfig(Path file) {
+        String result = "";
         try {
-            fileReader = new FileReader(fileName);
-        } catch (FileNotFoundException e) {
-            return e.getMessage();
-        }
-        BufferedReader bufferedReader = new BufferedReader(fileReader);
-        StringBuilder stringBuilder = new StringBuilder();
-        String line;
-        try {
-            line = bufferedReader.readLine();
-            while (line != null) {
-                stringBuilder.append(line);
-                line = bufferedReader.readLine();
+            if (!Files.exists(file.getParent())) {
+                Files.createDirectory(file.getParent());
             }
-        } catch (IOException e) {
-            return e.getMessage();
+            if (!Files.exists(file)) {
+                Files.createFile(file);
+            }
+            System.out.println(file.toRealPath());
+            result = Files.lines(file).collect(Collectors.joining());
+        } catch (Exception ex) {
+            System.out.println("读取配置时出现错误");
+            ex.printStackTrace();
         }
-        return stringBuilder.toString();
+        return result.equals("") ? "{}" : result;
+    }
+
+    /***
+     * 检测并将参数解析为double
+     * @param args 要解析的参数
+     * @param help 帮助信息
+     * @param fromGroup 群号
+     * @return 解析后的double，如果参数为空或解析出错发送错误信息并返回NaN
+     */
+    public double checkArgAndParseDouble(String[] args, String help, long fromGroup) {
+        try {
+            return Double.parseDouble(args[0]);
+        } catch (NumberFormatException e) {
+            CQ.sendGroupMsg(fromGroup, "沉寂觉得你输入的不是一个数字呢，请你立即女装呢");
+        } catch (NullPointerException e) {
+            CQ.sendGroupMsg(fromGroup, "沉寂觉得你的参数写错了呢，请你立即女装(" + help + ")呢");
+        }
+        return Double.NaN;
+    }
+
+    public void changeValue(String configKey, double value, BiFunction<Double, Double, Double> operator) {
+        config.put(configKey, operator.apply(config.getDouble(configKey), value));
+    }
+
+    public void toggleAndSendMsg(String feature, String configKey, long group) {
+        boolean bool = config.getBoolean(configKey);
+        config.put(configKey, !bool);
+        String toggleName = bool ? "关闭" : "开启";
+        CQ.sendGroupMsg(group, "沉寂" + toggleName + "了" + feature + "的功能");
+    }
+
+    public boolean ifNotSendMsg(long group, boolean bool) {
+        if (!bool) {
+            CQ.sendGroupMsg(group, "沉寂觉得你没权限来这样做呢，请你立即女装呢");
+        }
+        return bool;
+    }
+
+    public void sendAtMsg(long group, long qq, String msg) {
+        //名片同步
+        if (config.getBoolean("chengeCard")) {
+            CQ.setGroupCard(group, 1582952890L, "莫老现在竟然有" + getCurrentLength() + "纳米");
+        }
+        CQ.sendGroupMsg(group, CC.at(qq) + msg);
+    }
+
+    public String getCardName(long group, long qq) {
+        Member member = CQ.getGroupMemberInfo(group, qq);
+        return member.getCard().equals("") ? member.getNick() : member.getCard();
+    }
+
+    /**
+     * 应用将被停用 (Type=1004)<br>
+     * 当应用被停用前，将收到此事件。<br>
+     * 如果酷Q载入时应用已被停用，则本函数【不会】被调用。<br>
+     * 无论本应用是否被启用，酷Q关闭前本函数都【不会】被调用。
+     *
+     * @return 请固定返回0。
+     */
+    public int disable() {
+        enable = false;
+        return 0;
     }
 
     /**
@@ -203,137 +308,151 @@ public class Demo extends JcqAppAbstract implements ICQVer, IMsg, IRequest {
      */
     public int groupMsg(int subType, int msgId, long fromGroup, long fromQQ, String fromAnonymous, String msg,
                         int font) {
-        if (msg.equalsIgnoreCase("/length") || ((msg.contains("莫老") && msg.contains("丁丁") && msg.contains("长"))
-                && !(msg.contains("拽") || msg.contains("拉") || msg.contains("拔")))) {
-            CQ.sendGroupMsg(fromGroup, CC.at(fromQQ) + "莫老丁丁长度：" + (getLength() + config.getDouble("addLength")) + " 纳米，生长状况良好，其中有"
-                    + config.getDouble("addLength") + "是被众人揪起来的");
-        }
-        if (chengeCard) {
-            CQ.setGroupCard(fromGroup, 1582952890L,
-                    "莫老现在竟然有" + (20.0D + ((System.currentTimeMillis() - 1564934400000L) / 864000) * 0.0056D) + "纳米");
-        }
-        if (msg.equalsIgnoreCase("/toggleChengeCardMode")) {
-            if (fromQQ == 1582952890L) {
-                if (chengeCard) {
-                    CQ.sendGroupMsg(fromGroup, "沉寂开启了自己群名片同步莫老长度的功能");
-                    CQ.setGroupCard(fromGroup, 1582952890L, "莫老现在竟然有" + (getLength() + config.getDouble("addLength")) + "纳米");
-                } else
-                    CQ.sendGroupMsg(fromGroup, "沉寂关闭了自己群名片同步莫老长度的功能");
-                chengeCard = !chengeCard;
-            } else {
-                CQ.sendGroupMsg(fromGroup, "沉寂觉得你没权限来这样做呢，请你立即女装呢");
-            }
-        }
-
-        if (msg.equalsIgnoreCase("/toggleenableDragMode")) {
-            if (admin.contains(fromQQ)) {
-                if (config.getBoolean("enableDrag")) {
-                    CQ.sendGroupMsg(fromGroup, "沉寂关闭了拽莫老的功能");
-                } else
-                    CQ.sendGroupMsg(fromGroup, "沉寂开启了拽莫老的功能");
-                config.put("enableDrag", !config.getBoolean("enableDrag"));
-            } else {
-                CQ.sendGroupMsg(fromGroup, "沉寂觉得你没权限来这样做呢，请你立即女装呢");
-            }
-        }
-
-        if (msg.toLowerCase().startsWith("/cut")) {
-            if (admin.contains(fromQQ)) {
-                String[] sub = msg.split(" ");
-                if (sub.length <= 1) {
-                    CQ.sendGroupMsg(fromGroup, "沉寂觉得你的参数写错了呢，请你立即女装呢");
-                    return MSG_IGNORE;
-                }
-                double cut = 0.0D;
-                try {
-                    cut = Double.parseDouble(sub[1]);
-                } catch (NumberFormatException e) {
-                    CQ.sendGroupMsg(fromGroup, "沉寂觉得你输入的不是一个数字呢，请你立即女装(输入要切断的数字)呢");
-                }
-                config.put("addLength", -cut);
-                CQ.sendGroupMsg(fromGroup, CC.at(fromQQ) + "[切丁丁] oh! 你切掉了莫老的丁丁" + cut + "纳米");
-            } else {
-                CQ.sendGroupMsg(fromGroup, "沉寂觉得你没权限来这样做呢，请你立即女装呢");
-            }
-        }
-
-        if (msg.toLowerCase().startsWith("/admindrag")) {
-            if (admin.contains(fromQQ)) {
-                String[] sub = msg.split(" ");
-                if (sub.length <= 1) {
-                    CQ.sendGroupMsg(fromGroup, "沉寂觉得你的参数写错了呢，请你立即女装(输入要拉长数字)呢");
-                    return MSG_IGNORE;
-                }
-                double drag = 0.0D;
-                try {
-                    drag = Double.parseDouble(sub[1]);
-                } catch (NumberFormatException e) {
-                    CQ.sendGroupMsg(fromGroup, "沉寂觉得你输入的不是一个数字呢，请你立即女装呢");
-            }
-                config.put("addLength", drag);
-                CQ.sendGroupMsg(fromGroup, CC.at(fromQQ) + "[拽丁丁]你动用了管理员权限拽长了莫老丁丁" + drag + "纳米");
-            } else {
-                CQ.sendGroupMsg(fromGroup, "沉寂觉得你没权限来这样做呢，请你立即女装呢");
-            }
-        }
-
-        if (msg.equalsIgnoreCase("/cleardrag")) {
-            if (admin.contains(fromQQ)) {
-                CQ.sendGroupMsg(fromGroup, CC.at(fromQQ) + "清空了被揪长的部分");
-                //addLength = 0d;
-                config.put("addLength", 0.0D);
-            } else {
-                CQ.sendGroupMsg(fromGroup, "沉寂觉得你没权限来这样做呢，请你立即女装呢");
-            }
-        }
-        if (config.getBoolean("enableDrag")) {
-            if (msg.equalsIgnoreCase("/Drag") || (msg.contains("莫老") && msg.contains("丁丁")
-                    && (msg.contains("拽") || msg.contains("拉") || msg.contains("拔")))) {
-                if (isCooling(fromQQ, fromGroup)) {
-                    double length = (int) (Math.random() * 10d);
-                    if (length == 0.0D) {
-                        CQ.sendGroupMsg(fromGroup, CC.at(fromQQ) + "[拽丁丁]震惊，竟然没拽动莫老的丁丁，现在有"
-                                + (getLength() + config.getDouble("addLength")) + "纳米  " + getDisplay(getLength() + config.getDouble("addLength")));
-
-                        return MSG_IGNORE;
+        if (msg.startsWith("/")) {
+            String[] command = msg.split(" ");
+            String root = command[0].substring(1);
+            String[] args = command.length > 1 ? Arrays.copyOfRange(command, 1, command.length) : null;
+            switch (root.toLowerCase()) {
+                case "reload":
+                    if (ifNotSendMsg(fromGroup, admin.contains(fromQQ))) {
+                        startup();
+                        CQ.sendGroupMsg(fromGroup, "重载完成");
                     }
-                    if (fromQQ == 602723113L || ((Math.random() < 0.1d) && config.getDouble("addLength") > 0)) {
-                        length = -length * 10 - 5;
+                    return MSG_IGNORE;
+                case "drag":
+                    if (config.getBoolean("enableDrag")) {
+                        drag(fromGroup, fromQQ);
                     }
-                    if (length + config.getDouble("addLength") < 0) {
-                        length = -config.getDouble("addLength");
-                        //this.addLength = 0;
+                    return MSG_IGNORE;
+                case "length":
+                    sendLengthMsg(fromGroup, fromQQ);
+                    return MSG_IGNORE;
+                case "拽长排行":
+                    sendAtMsg(fromGroup, fromQQ, "\n拽长前十排行：\n" + addDDMap.entrySet().stream().sorted(Map.Entry.comparingByValue(reserved(Double::compare))).limit(10).map(entry -> getCardName(fromGroup, entry.getKey()) + "(" + entry.getKey() + ")" + "|贡献长度：" + entry.getValue()).collect(Collectors.joining("\n")));
+                    return MSG_IGNORE;
+                case "拽断排行":
+                    sendAtMsg(fromGroup, fromQQ, "\n拽断前十排行：\n" + cutDDMap.entrySet().stream().sorted(Map.Entry.comparingByValue(Double::compare)).limit(10).map(entry -> getCardName(fromGroup, entry.getKey()) + "(" + entry.getKey() + ")" + "|贡献长度：" + entry.getValue()).collect(Collectors.joining("\n")));
+                    return MSG_IGNORE;
+                case "贡献排行":
+                    updateTotalMap();
+                    sendAtMsg(fromGroup, fromQQ, "\n贡献前十排行：\n" + totalDDMap.entrySet().stream().sorted(Map.Entry.comparingByValue(reserved(Double::compare))).limit(10).map(entry -> getCardName(fromGroup, entry.getKey()) + "(" + entry.getKey() + ")" + "|贡献长度：" + entry.getValue()).collect(Collectors.joining("\n")));
+                    return MSG_IGNORE;
+                case "togglechengecardmode":
+                    if (ifNotSendMsg(fromGroup, 1582952890L == fromQQ)) {
+                        toggleAndSendMsg("自己群名片同步莫老长度", "chengeCard", fromGroup);
+                        //名片同步
+                        if (config.getBoolean("chengeCard")) {
+                            CQ.setGroupCard(fromGroup, 1582952890L, "莫老现在竟然有" + getCurrentLength() + "纳米");
+                        }
+                    }
+                    return MSG_IGNORE;
+                case "toggleenabledragmode":
+                    if (ifNotSendMsg(fromGroup, admin.contains(fromQQ))) {
+                        toggleAndSendMsg("拽莫老", "enableDrag", fromGroup);
+                    }
+                    return MSG_IGNORE;
+                case "cleardrag":
+                    if (ifNotSendMsg(fromGroup, admin.contains(fromQQ))) {
+                        sendAtMsg(fromGroup, fromQQ, "清空了被揪长的部分");
                         config.put("addLength", 0.0D);
-                    } else
-                        //this.addLength += length;
-                    config.put("addLength", config.getDouble("addLength") + length);
-                    if (length < 0) {
-                        CQ.sendGroupMsg(fromGroup, CC.at(fromQQ) + "[拽丁丁]震惊，竟然拽断了" + (Math.abs(length)) + "纳米，现在有"
-                                + (getLength() + config.getDouble("addLength")) + "纳米  " + getDisplay(getLength() + config.getDouble("addLength")));
-                    } else {
-                        CQ.sendGroupMsg(fromGroup, CC.at(fromQQ) + "[拽丁丁]拽长了" + (length) + "纳米，现在有"
-                                + (getLength() + config.getDouble("addLength")) + "纳米  " + getDisplay(getLength() + config.getDouble("addLength")));
                     }
+                    return MSG_IGNORE;
+                case "cut":
+                    if (ifNotSendMsg(fromGroup, admin.contains(fromQQ))) {
+                        double cut = checkArgAndParseDouble(args, "输入要切断的数字", fromGroup);
+                        if (!Double.isNaN(cut)) {
+                            //防止addLength为负数
+                            //cut = subtract(config.getDouble("addLength"), cut) < 0 ? config.getDouble("addLength") : cut;
+                            changeValue("addLength", cut, OperatorHelper::subtract);
+                            sendAtMsg(fromGroup, fromQQ, "[切丁丁] oh! 你切掉了莫老的丁丁" + cut + "纳米");
+                        }
+                    }
+                    return MSG_IGNORE;
+                case "admindrag":
+                    if (ifNotSendMsg(fromGroup, admin.contains(fromQQ))) {
+                        double drag = checkArgAndParseDouble(args, "输入要拉长数字", fromGroup);
+                        if (!Double.isNaN(drag)) {
+                            changeValue("addLength", drag, OperatorHelper::add);
+                            sendAtMsg(fromGroup, fromQQ, "[拽丁丁]你动用了管理员权限拽长了莫老丁丁" + drag + "纳米");
+                        }
+                    }
+                    return MSG_IGNORE;
+                default:
+                    return MSG_IGNORE;
+            }
+        } else {
+            //语义分析命令
+            boolean dragKeywords = msg.contains("拽") || msg.contains("拉") || msg.contains("拔");
+            if ((msg.contains("莫老") && msg.contains("丁丁") && msg.contains("长")) && !dragKeywords) {
+                sendLengthMsg(fromGroup, fromQQ);
+                return MSG_IGNORE;
+            }
+            if (config.getBoolean("enableDrag")) {
+                if ((msg.contains("莫老") && msg.contains("丁丁")) && dragKeywords) {
+                    drag(fromGroup, fromQQ);
+                    return MSG_IGNORE;
+                }
+                if (msg.contains("莫老") && msg.contains("丁丁") && (msg.contains("算"))) {
+                    CQ.sendGroupMsg(fromGroup, CC.at(fromQQ)
+                            + "莫老丁丁的计算公式：(20.0D + ((System.currentTimeMillis() - 1564934400000L) / 864000) * 0.0056D)+被拽的长度");
+                    return MSG_IGNORE;
                 }
             }
         }
-        if (msg.contains("莫老") && msg.contains("丁丁") && (msg.contains("算"))) {
-            CQ.sendGroupMsg(fromGroup, CC.at(fromQQ)
-                    + "莫老丁丁的计算公式：(20.0D + ((System.currentTimeMillis() - 1564934400000L) / 864000) * 0.0056D)+被拽的长度");
-        }
-
         return MSG_IGNORE;
     }
 
-    private double getLength() {
-        return (20.0D + ((System.currentTimeMillis() - 1564934400000L) / 864000) * 0.0056D);
+    private void sendLengthMsg(long fromGroup, long fromQQ) {
+        sendAtMsg(fromGroup, fromQQ, "莫老丁丁长度：" + (getOriginalLength() + config.getDouble("addLength")) + " 纳米，生长状况良好，其中有" + config.getDouble("addLength") + "是被众人揪起来的");
+    }
+
+    private void drag(long fromGroup, long fromQQ) {
+        if (isCooling(fromQQ, fromGroup)) {
+            double length = random.nextDouble() * 10d;
+            if (length == 0.0d || length == -0.0d) {
+                sendAtMsg(fromGroup, fromQQ, "[拽丁丁]震惊，竟然没拽动莫老的丁丁，现在有"
+                        + getCurrentLength() + "纳米  " + getDisplay(getCurrentLength()));
+                return;
+            }
+            if (fromQQ == 602723113L || random.nextInt(100) < 10) {
+                length = -length * 10 - 5;
+            }
+            //保留两位小数并确保最小值为±0.01
+            length = length > 0 ? Math.max(toTwoPrecision(length), 0.01) : Math.min(toTwoPrecision(length), -0.01);
+            //防止addLength为负数
+            length = add(length, config.getDouble("addLength")) < 0 ? -config.getDouble("addLength") : length;
+            changeValue("addLength", length, OperatorHelper::add);
+            if (length < 0) {
+                cutDDMap.merge(fromQQ, length, OperatorHelper::add);
+                sendAtMsg(fromGroup, fromQQ, "[拽丁丁]震惊，竟然拽断了" + Math.abs(length) + "纳米，现在有"
+                        + getCurrentLength() + "纳米 \n" + getDisplay(getCurrentLength()));
+            } else {
+                addDDMap.merge(fromQQ, length, OperatorHelper::add);
+                sendAtMsg(fromGroup, fromQQ, "[拽丁丁]拽长了" + length + "纳米，现在有"
+                        + getCurrentLength() + "纳米 \n" + getDisplay(getCurrentLength()));
+            }
+        }
+    }
+
+    private double getCurrentLength() {
+        return add(getOriginalLength(), config.getDouble("addLength"));
+    }
+
+    private double getOriginalLength() {
+        //(20.0D + ((System.currentTimeMillis() - 1564934400000L) / 864000) * 0.0056D)
+        return add(20.0D, multiply(divide(System.currentTimeMillis() - 1564934400000L, 864000L), 0.0056D));
     }
 
     private String getDisplay(double l) {
-        StringBuilder sb = new StringBuilder("8");
+        //获取整数长度并-1乘10作为单位
+        int unit = (Integer.valueOf((int) l).toString().length() - 1) * 10;
+        //"(x"+unit+")\n8"
+        StringBuilder sb = new StringBuilder("(x");
+        sb.append(unit);
+        sb.append(")\n8");
         while (l >= 1) {
             sb.append('=');
-            l -= 10d;
+            l -= unit;
         }
         sb.append('>');
         return sb.toString();
